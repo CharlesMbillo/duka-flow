@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const [businessName, setBusinessName] = useState('');
   const [kraPin, setKraPin] = useState('');
   const [etimsEnabled, setEtimsEnabled] = useState(false);
+  const printer = usePrinter();
 
   useEffect(() => {
     (async () => {

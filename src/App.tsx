@@ -22,7 +22,17 @@ function AppContent() {
     seedSampleProducts().then(() => setReady(true));
   }, []);
 
-  return (
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center animate-pulse">
+          <span className="text-primary-foreground font-display font-bold">K</span>
+        </div>
+      </div>
+    );
+  }
+
+
     <Routes>
       <Route path="/install" element={<InstallPage />} />
       <Route path="*" element={

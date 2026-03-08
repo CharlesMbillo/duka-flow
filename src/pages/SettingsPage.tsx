@@ -136,6 +136,62 @@ export default function SettingsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="font-display text-base flex items-center gap-2">
+            <Printer className="h-4 w-4" /> Receipt Printer
+          </CardTitle>
+          <CardDescription>Connect a Bluetooth thermal printer</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!printer.supported ? (
+            <p className="text-sm text-muted-foreground">
+              WebBluetooth is not supported in this browser. Use Chrome or Edge on Android.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Status</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {printer.connected ? (
+                      <span className="text-primary font-medium flex items-center gap-1">
+                        <Bluetooth className="h-3 w-3" /> {printer.deviceName}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <BluetoothOff className="h-3 w-3" /> Not connected
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {printer.connected ? (
+                  <Button variant="outline" size="sm" onClick={printer.disconnect}>
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={printer.connect} disabled={printer.connecting}>
+                    {printer.connecting ? 'Scanning...' : 'Connect'}
+                  </Button>
+                )}
+              </div>
+              <div>
+                <Label>Paper Width</Label>
+                <Select value={printer.paperWidth} onValueChange={(v) => printer.changePaperWidth(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="58mm">58mm (32 chars)</SelectItem>
+                    <SelectItem value="80mm">80mm (48 chars)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-base flex items-center gap-2">
             <Download className="h-4 w-4" /> Data
           </CardTitle>
         </CardHeader>

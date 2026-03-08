@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { seedSampleProducts } from "@/db/database";
 import SalesPage from "@/pages/SalesPage";
 import InventoryPage from "@/pages/InventoryPage";
@@ -16,9 +16,22 @@ import NotFound from "@/pages/NotFound";
 const queryClient = new QueryClient();
 
 function AppContent() {
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    seedSampleProducts();
+    seedSampleProducts().then(() => setReady(true));
   }, []);
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center animate-pulse">
+          <span className="text-primary-foreground font-display font-bold">K</span>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <Routes>

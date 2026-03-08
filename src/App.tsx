@@ -3,10 +3,40 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import { AppShell } from "@/components/layout/AppShell";
+import { useEffect } from "react";
+import { seedSampleProducts } from "@/db/database";
+import SalesPage from "@/pages/SalesPage";
+import InventoryPage from "@/pages/InventoryPage";
+import HistoryPage from "@/pages/HistoryPage";
+import SettingsPage from "@/pages/SettingsPage";
+import InstallPage from "@/pages/InstallPage";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function AppContent() {
+  useEffect(() => {
+    seedSampleProducts();
+  }, []);
+
+  return (
+    <Routes>
+      <Route path="/install" element={<InstallPage />} />
+      <Route path="*" element={
+        <AppShell>
+          <Routes>
+            <Route path="/" element={<SalesPage />} />
+            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AppShell>
+      } />
+    </Routes>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -14,11 +44,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AppContent />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

@@ -69,8 +69,17 @@ export function CheckoutDialog({ open, onOpenChange, total, onConfirm }: Checkou
               <Button variant="outline" className="flex-1" onClick={handleClose}>
                 New Sale
               </Button>
-              <Button className="flex-1 gap-2" onClick={handleClose}>
-                <Printer className="h-4 w-4" /> Print
+              <Button
+                className="flex-1 gap-2"
+                disabled={!printer.connected || printer.printing}
+                onClick={() => transaction && printer.print(transaction)}
+              >
+                {printer.printing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                {printer.printing ? 'Printing...' : printer.connected ? 'Print' : 'No Printer'}
               </Button>
             </div>
           </div>

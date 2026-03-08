@@ -33,6 +33,7 @@ function AppContent() {
   }
 
 
+  return (
     <Routes>
       <Route path="/install" element={<InstallPage />} />
       <Route path="*" element={

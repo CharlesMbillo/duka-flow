@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type Transaction } from '@/db/database';
-import { Check, Printer } from 'lucide-react';
+import { Check, Printer, Loader2 } from 'lucide-react';
+import { usePrinter } from '@/hooks/usePrinter';
 
 interface CheckoutDialogProps {
   open: boolean;
@@ -16,6 +17,7 @@ export function CheckoutDialog({ open, onOpenChange, total, onConfirm }: Checkou
   const [amountPaid, setAmountPaid] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(false);
+  const printer = usePrinter();
 
   const paid = parseFloat(amountPaid) || 0;
   const change = paid - total;
@@ -67,8 +69,17 @@ export function CheckoutDialog({ open, onOpenChange, total, onConfirm }: Checkou
               <Button variant="outline" className="flex-1" onClick={handleClose}>
                 New Sale
               </Button>
-              <Button className="flex-1 gap-2" onClick={handleClose}>
-                <Printer className="h-4 w-4" /> Print
+              <Button
+                className="flex-1 gap-2"
+                disabled={!printer.connected || printer.printing}
+                onClick={() => transaction && printer.print(transaction)}
+              >
+                {printer.printing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                {printer.printing ? 'Printing...' : printer.connected ? 'Print' : 'No Printer'}
               </Button>
             </div>
           </div>

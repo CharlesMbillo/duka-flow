@@ -17,6 +17,7 @@ export function CheckoutDialog({ open, onOpenChange, total, onConfirm }: Checkou
   const [amountPaid, setAmountPaid] = useState('');
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(false);
+  const printer = usePrinter();
 
   const paid = parseFloat(amountPaid) || 0;
   const change = paid - total;

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, Download, Upload, Store, Printer } from 'lucide-react';
+import { Shield, Download, Upload, Store } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
@@ -15,9 +15,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     (async () => {
-      const bn = await db.settings.where('key').equals('businessName').first();
-      const kp = await db.settings.where('key').equals('kraPin').first();
-      const et = await db.settings.where('key').equals('etimsEnabled').first();
+      const bn = await db.settings.getByKey('businessName');
+      const kp = await db.settings.getByKey('kraPin');
+      const et = await db.settings.getByKey('etimsEnabled');
       if (bn) setBusinessName(bn.value);
       if (kp) setKraPin(kp.value);
       if (et) setEtimsEnabled(et.value === 'true');
@@ -25,9 +25,10 @@ export default function SettingsPage() {
   }, []);
 
   const saveSetting = async (key: string, value: string) => {
-    const existing = await db.settings.where('key').equals(key).first();
+    const existing = await db.settings.getByKey(key);
     if (existing) {
-      await db.settings.update(existing.id!, { value });
+      existing.value = value;
+      await db.settings.put(existing);
     } else {
       await db.settings.add({ key, value });
     }
@@ -42,9 +43,9 @@ export default function SettingsPage() {
 
   const handleBackup = async () => {
     const data = {
-      products: await db.products.toArray(),
-      transactions: await db.transactions.toArray(),
-      settings: await db.settings.toArray(),
+      products: await db.products.getAll(),
+      transactions: await db.transactions.getAll(),
+      settings: await db.settings.getAll(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -66,9 +67,18 @@ export default function SettingsPage() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (data.products) { await db.products.clear(); await db.products.bulkAdd(data.products); }
-        if (data.transactions) { await db.transactions.clear(); await db.transactions.bulkAdd(data.transactions); }
-        if (data.settings) { await db.settings.clear(); await db.settings.bulkAdd(data.settings); }
+        if (data.products) {
+          await db.products.clear();
+          for (const p of data.products) await db.products.add(p);
+        }
+        if (data.transactions) {
+          await db.transactions.clear();
+          for (const t of data.transactions) await db.transactions.add(t);
+        }
+        if (data.settings) {
+          await db.settings.clear();
+          for (const s of data.settings) await db.settings.add(s);
+        }
         toast.success('Data restored successfully');
         window.location.reload();
       } catch {

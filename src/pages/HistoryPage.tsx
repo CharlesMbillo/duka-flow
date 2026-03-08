@@ -1,17 +1,21 @@
 import { db, type Transaction } from '@/db/database';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Receipt, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 
 export default function HistoryPage() {
-  const transactions = useLiveQuery(
-    () => db.transactions.orderBy('createdAt').reverse().limit(100).toArray()
-  ) ?? [];
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selected, setSelected] = useState<Transaction | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const all = await db.transactions.getAll();
+      setTransactions(all.reverse());
+    })();
+  }, []);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

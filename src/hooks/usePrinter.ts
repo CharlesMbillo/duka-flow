@@ -70,7 +70,7 @@ export function usePrinter() {
     setPrinting(false);
   }, []);
 
-  const supported = typeof navigator !== 'undefined' && !!navigator.bluetooth;
+  const supported = typeof navigator !== 'undefined' && !!(navigator as any).bluetooth;
 
   return {
     supported,

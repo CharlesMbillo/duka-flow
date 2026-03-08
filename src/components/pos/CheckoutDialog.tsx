@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type Transaction } from '@/db/database';
-import { Check, Printer } from 'lucide-react';
+import { Check, Printer, Loader2 } from 'lucide-react';
+import { usePrinter } from '@/hooks/usePrinter';
 
 interface CheckoutDialogProps {
   open: boolean;

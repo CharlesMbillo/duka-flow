@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { type Transaction } from '@/db/database';
 import { Check, Printer, Loader2 } from 'lucide-react';
 import { usePrinter } from '@/hooks/usePrinter';
+import { printReceipt } from '@/lib/receipt';
 
 interface CheckoutDialogProps {
   open: boolean;
@@ -71,15 +72,19 @@ export function CheckoutDialog({ open, onOpenChange, total, onConfirm }: Checkou
               </Button>
               <Button
                 className="flex-1 gap-2"
-                disabled={!printer.connected || printer.printing}
-                onClick={() => transaction && printer.print(transaction)}
+                disabled={printer.printing}
+                onClick={() => {
+                  if (!transaction) return;
+                  if (printer.connected) printer.print(transaction);
+                  else printReceipt(transaction);
+                }}
               >
                 {printer.printing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Printer className="h-4 w-4" />
                 )}
-                {printer.printing ? 'Printing...' : printer.connected ? 'Print' : 'No Printer'}
+                {printer.printing ? 'Printing...' : 'Print Receipt'}
               </Button>
             </div>
           </div>

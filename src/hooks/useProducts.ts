@@ -1,29 +1,39 @@
 import { useState, useEffect, useCallback } from 'react';
-import { db, type Product, type TaxCategory } from '@/db/database';
+import { db, type Product } from '@/db/database';
+import { subscribe } from '@/lib/dbEvents';
 
 export function useProducts(searchQuery = '') {
   const [products, setProducts] = useState<Product[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
   const [version, setVersion] = useState(0);
 
-  const bump = () => setVersion(v => v + 1);
+  const bump = useCallback(() => setVersion(v => v + 1), []);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      let all = await db.products.getAll();
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        all = all.filter(p =>
-          p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          (p.barcode?.toLowerCase().includes(q) ?? false)
-        );
-      }
-      setProducts(all);
-      const low = (await db.products.getAll()).filter(p => p.stock <= p.lowStockAlert);
-      setLowStockProducts(low);
+      const all = await db.products.getAll();
+      if (cancelled) return;
+      const q = searchQuery.trim().toLowerCase();
+      const filtered = q
+        ? all.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.sku.toLowerCase().includes(q) ||
+            (p.barcode?.toLowerCase().includes(q) ?? false)
+          )
+        : all;
+      setProducts(filtered);
+      setLowStockProducts(all.filter(p => p.stock <= p.lowStockAlert));
     })();
+    return () => { cancelled = true; };
   }, [searchQuery, version]);
+
+  // Live updates: refresh when products or transactions change (transactions decrement stock)
+  useEffect(() => {
+    const offP = subscribe('products', bump);
+    const offT = subscribe('transactions', bump);
+    return () => { offP(); offT(); };
+  }, [bump]);
 
   const addProduct = useCallback(async (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();

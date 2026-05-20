@@ -207,28 +207,30 @@ async function getByIndex<T>(storeName: string, indexName: string, value: IDBVal
   });
 }
 
-// Domain-specific API
+import { emit } from '@/lib/dbEvents';
+
+// Domain-specific API. Mutations broadcast events so every view updates instantly.
 export const db = {
   products: {
     getAll: () => getAll<Product>('products'),
     get: (id: number) => getById<Product>('products', id),
-    add: (p: Product) => add('products', p),
-    put: (p: Product) => put('products', p),
-    delete: (id: number) => remove('products', id),
-    clear: () => clearStore('products'),
+    add: async (p: Product) => { const r = await add('products', p); emit('products'); return r; },
+    put: async (p: Product) => { await put('products', p); emit('products'); },
+    delete: async (id: number) => { await remove('products', id); emit('products'); },
+    clear: async () => { await clearStore('products'); emit('products'); },
   },
   cartItems: {
     getAll: () => getAll<CartItem>('cartItems'),
     getByProductId: (productId: number) => getByIndex<CartItem>('cartItems', 'productId', productId),
-    add: (item: CartItem) => add('cartItems', item),
-    put: (item: CartItem) => put('cartItems', item),
-    delete: (id: number) => remove('cartItems', id),
-    clear: () => clearStore('cartItems'),
+    add: async (item: CartItem) => { const r = await add('cartItems', item); emit('cartItems'); return r; },
+    put: async (item: CartItem) => { await put('cartItems', item); emit('cartItems'); },
+    delete: async (id: number) => { await remove('cartItems', id); emit('cartItems'); },
+    clear: async () => { await clearStore('cartItems'); emit('cartItems'); },
   },
   transactions: {
     getAll: () => getAll<Transaction>('transactions'),
-    add: (tx: Transaction) => add('transactions', tx),
-    clear: () => clearStore('transactions'),
+    add: async (tx: Transaction) => { const r = await add('transactions', tx); emit('transactions'); return r; },
+    clear: async () => { await clearStore('transactions'); emit('transactions'); },
   },
   etimsQueue: {
     getAll: () => getAll<EtimsQueueItem>('etimsQueue'),
@@ -241,9 +243,9 @@ export const db = {
       const all = await getByIndex<AppSetting>('settings', 'key', key);
       return all[0];
     },
-    put: (s: AppSetting) => put('settings', s),
-    add: (s: AppSetting) => add('settings', s),
-    clear: () => clearStore('settings'),
+    put: async (s: AppSetting) => { await put('settings', s); emit('settings'); },
+    add: async (s: AppSetting) => { const r = await add('settings', s); emit('settings'); return r; },
+    clear: async () => { await clearStore('settings'); emit('settings'); },
   },
 };
 

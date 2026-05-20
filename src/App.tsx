@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useEffect, useState } from "react";
 import { seedSampleProducts } from "@/db/database";
+import LandingPage from "@/pages/LandingPage";
 import SalesPage from "@/pages/SalesPage";
 import InventoryPage from "@/pages/InventoryPage";
 import HistoryPage from "@/pages/HistoryPage";

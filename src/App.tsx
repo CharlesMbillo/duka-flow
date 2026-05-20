@@ -36,11 +36,12 @@ function AppContent() {
 
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/install" element={<InstallPage />} />
       <Route path="*" element={
         <AppShell>
           <Routes>
-            <Route path="/" element={<SalesPage />} />
+            <Route path="/pos" element={<SalesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />

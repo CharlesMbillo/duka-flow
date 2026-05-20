@@ -13,6 +13,7 @@ import HistoryPage from "@/pages/HistoryPage";
 import SettingsPage from "@/pages/SettingsPage";
 import InstallPage from "@/pages/InstallPage";
 import NotFound from "@/pages/NotFound";
+import { RoleGate } from "@/components/RoleGate";
 
 const queryClient = new QueryClient();
 
@@ -42,9 +43,9 @@ function AppContent() {
         <AppShell>
           <Routes>
             <Route path="/pos" element={<SalesPage />} />
-            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/inventory" element={<RoleGate requireOwner><InventoryPage /></RoleGate>} />
             <Route path="/history" element={<HistoryPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<RoleGate requireOwner><SettingsPage /></RoleGate>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppShell>

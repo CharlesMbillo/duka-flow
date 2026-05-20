@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useEffect, useState } from "react";
 import { seedSampleProducts } from "@/db/database";
+import LandingPage from "@/pages/LandingPage";
 import SalesPage from "@/pages/SalesPage";
 import InventoryPage from "@/pages/InventoryPage";
 import HistoryPage from "@/pages/HistoryPage";
@@ -35,11 +36,12 @@ function AppContent() {
 
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/install" element={<InstallPage />} />
       <Route path="*" element={
         <AppShell>
           <Routes>
-            <Route path="/" element={<SalesPage />} />
+            <Route path="/pos" element={<SalesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />

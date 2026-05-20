@@ -3,7 +3,7 @@ import { ShoppingCart, Package, History, Settings, Wifi, WifiOff } from 'lucide-
 import { useState, useEffect } from 'react';
 
 const navItems = [
-  { to: '/', icon: ShoppingCart, label: 'Sell' },
+  { to: '/pos', icon: ShoppingCart, label: 'Sell' },
   { to: '/inventory', icon: Package, label: 'Inventory' },
   { to: '/history', icon: History, label: 'History' },
   { to: '/settings', icon: Settings, label: 'Settings' },

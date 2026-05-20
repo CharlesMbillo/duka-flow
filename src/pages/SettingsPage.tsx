@@ -195,6 +195,52 @@ export default function SettingsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="font-display text-base flex items-center gap-2">
+            <Users className="h-4 w-4" /> Team Access
+          </CardTitle>
+          <CardDescription>
+            <span className="font-medium text-foreground">Owner</span> can manage inventory & settings. <span className="font-medium text-foreground">Salesman</span> can only sell and view history.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label>Owner PIN</Label>
+            <Input
+              type="password"
+              inputMode="numeric"
+              placeholder={`Current: ${'•'.repeat(ownerPin.length)}`}
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Used to switch from Salesman to Owner. Default is 1234.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (newPin.length < 4) { toast.error('PIN must be at least 4 digits'); return; }
+                setOwnerPin(newPin);
+                setOwnerPinState(newPin);
+                setNewPin('');
+                toast.success('Owner PIN updated');
+              }}
+            >
+              Update PIN
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setRole('salesman'); toast.success('Switched to Salesman'); }}
+            >
+              Hand off to Salesman
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-base flex items-center gap-2">
             <Download className="h-4 w-4" /> Data
           </CardTitle>
         </CardHeader>

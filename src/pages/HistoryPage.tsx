@@ -1,27 +1,50 @@
 import { db, type Transaction } from '@/db/database';
-import { Receipt, ChevronRight } from 'lucide-react';
+import { Receipt, ChevronRight, Download, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
+import { subscribe } from '@/lib/dbEvents';
+import { printReceipt, downloadSalesReport } from '@/lib/receipt';
+import { toast } from 'sonner';
 
 export default function HistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selected, setSelected] = useState<Transaction | null>(null);
+  const [businessName, setBusinessName] = useState('KwaPOS');
 
   useEffect(() => {
-    (async () => {
+    const load = async () => {
       const all = await db.transactions.getAll();
       setTransactions(all.reverse());
-    })();
+      const bn = await db.settings.getByKey('businessName');
+      if (bn?.value) setBusinessName(bn.value);
+    };
+    load();
+    return subscribe('transactions', load);
   }, []);
+
+  const handleExport = () => {
+    if (transactions.length === 0) {
+      toast.error('No sales to export yet');
+      return;
+    }
+    downloadSalesReport(transactions);
+    toast.success(`Exported ${transactions.length} sales`);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 py-3 shrink-0">
-        <h2 className="font-display font-bold text-xl">Sales History</h2>
-        <p className="text-sm text-muted-foreground">{transactions.length} transactions</p>
+      <div className="px-4 py-3 shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display font-bold text-xl">Sales History</h2>
+          <p className="text-sm text-muted-foreground">{transactions.length} transactions</p>
+        </div>
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleExport}>
+          <Download className="h-4 w-4" /> Report
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
@@ -109,6 +132,10 @@ export default function HistoryPage() {
                     size={120}
                   />
                 </div>
+
+                <Button className="w-full gap-2" onClick={() => printReceipt(selected, businessName)}>
+                  <Printer className="h-4 w-4" /> Print Receipt
+                </Button>
               </div>
             </>
           )}

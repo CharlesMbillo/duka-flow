@@ -5,15 +5,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, Download, Upload, Store, Bluetooth, BluetoothOff, Printer } from 'lucide-react';
+import { Shield, Download, Upload, Store, Bluetooth, BluetoothOff, Printer, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePrinter } from '@/hooks/usePrinter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getOwnerPin, setOwnerPin, setRole } from '@/lib/roles';
 
 export default function SettingsPage() {
   const [businessName, setBusinessName] = useState('');
   const [kraPin, setKraPin] = useState('');
   const [etimsEnabled, setEtimsEnabled] = useState(false);
+  const [ownerPin, setOwnerPinState] = useState(getOwnerPin());
+  const [newPin, setNewPin] = useState('');
   const printer = usePrinter();
 
   useEffect(() => {

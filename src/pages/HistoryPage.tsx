@@ -132,6 +132,10 @@ export default function HistoryPage() {
                     size={120}
                   />
                 </div>
+
+                <Button className="w-full gap-2" onClick={() => printReceipt(selected, businessName)}>
+                  <Printer className="h-4 w-4" /> Print Receipt
+                </Button>
               </div>
             </>
           )}

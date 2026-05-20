@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db, type CartItem, type Product, getTaxRate, generateReceiptNumber, type Transaction } from '@/db/database';
+import { subscribe } from '@/lib/dbEvents';
 
 export function useCart() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -11,6 +12,8 @@ export function useCart() {
   }, []);
 
   useEffect(() => { reload(); }, [reload, version]);
+
+  useEffect(() => subscribe('cartItems', () => setVersion(v => v + 1)), []);
 
   const bump = () => setVersion(v => v + 1);
 

@@ -198,7 +198,7 @@ export default function HistoryPage() {
         )}
       </div>
 
-      <Dialog open={!!selected && !voidOpen} onOpenChange={() => setSelected(null)}>
+      <Dialog open={!!selected && !voidOpen} onOpenChange={(o) => { if (!o && !voidOpen) setSelected(null); }}>
         <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
           {selected && (
             <>

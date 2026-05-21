@@ -233,8 +233,39 @@ export const db = {
   },
   transactions: {
     getAll: () => getAll<Transaction>('transactions'),
+    get: (id: number) => getById<Transaction>('transactions', id),
     add: async (tx: Transaction) => { const r = await add('transactions', tx); emit('transactions'); return r; },
+    put: async (tx: Transaction) => { await put('transactions', tx); emit('transactions'); },
     clear: async () => { await clearStore('transactions'); emit('transactions'); },
+    void: async (id: number, reason: string, by: 'owner' | 'salesman') => {
+      const tx = await getById<Transaction>('transactions', id);
+      if (!tx || tx.voided) return;
+      // Restore stock for each line item
+      for (const item of tx.items) {
+        const product = await getById<Product>('products', item.productId);
+        if (product) {
+          product.stock += item.quantity;
+          product.updatedAt = new Date().toISOString();
+          await put('products', product);
+        }
+      }
+      tx.voided = true;
+      tx.voidedAt = new Date().toISOString();
+      tx.voidReason = reason;
+      tx.voidedBy = by;
+      await put('transactions', tx);
+      // Queue a void/credit-note entry for eTIMS
+      await add('etimsQueue', {
+        transactionId: id,
+        receiptNumber: tx.receiptNumber,
+        invoiceData: JSON.stringify({ type: 'void', receiptNumber: tx.receiptNumber, reason, voidedAt: tx.voidedAt }),
+        status: 'queued',
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+      } as EtimsQueueItem);
+      emit('transactions');
+      emit('products');
+    },
   },
   etimsQueue: {
     getAll: () => getAll<EtimsQueueItem>('etimsQueue'),

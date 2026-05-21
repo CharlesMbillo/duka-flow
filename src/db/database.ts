@@ -39,6 +39,10 @@ export interface Transaction {
   kraInvoiceNumber?: string;
   kraSubmissionStatus?: 'pending' | 'submitted' | 'failed' | 'not_applicable';
   createdAt: string;
+  voided?: boolean;
+  voidedAt?: string;
+  voidReason?: string;
+  voidedBy?: 'owner' | 'salesman';
 }
 
 export interface EtimsQueueItem {

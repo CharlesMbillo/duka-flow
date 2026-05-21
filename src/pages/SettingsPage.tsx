@@ -5,11 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, Download, Upload, Store, Bluetooth, BluetoothOff, Printer, Users } from 'lucide-react';
+import { Shield, Download, Upload, Store, Bluetooth, BluetoothOff, Printer, Users, CloudUpload, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePrinter } from '@/hooks/usePrinter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getOwnerPin, setOwnerPin, setRole } from '@/lib/roles';
+import { useEtimsQueue } from '@/hooks/useEtimsQueue';
+import { attemptEtimsSync } from '@/lib/sync';
+import { format } from 'date-fns';
 
 export default function SettingsPage() {
   const [businessName, setBusinessName] = useState('');

@@ -264,6 +264,36 @@ export default function SettingsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="font-display text-base flex items-center gap-2">
+            <CloudUpload className="h-4 w-4" /> eTIMS Sync
+          </CardTitle>
+          <CardDescription>
+            Sales are saved offline. KRA submissions run in the background when online.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Pending submissions</span>
+            <span className={`font-semibold ${queue.pendingCount > 0 ? 'text-warning' : 'text-primary'}`}>
+              {queue.pendingCount}
+            </span>
+          </div>
+          {lastAttempt && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Last attempt</span>
+              <span>{format(new Date(lastAttempt), 'MMM d, h:mm a')}</span>
+            </div>
+          )}
+          <Button variant="outline" className="w-full gap-2" onClick={handleSync} disabled={syncing}>
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Retry sync now'}
+          </Button>
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-base flex items-center gap-2">
             <Download className="h-4 w-4" /> Data
           </CardTitle>
         </CardHeader>

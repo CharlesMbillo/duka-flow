@@ -20,7 +20,27 @@ export default function SettingsPage() {
   const [etimsEnabled, setEtimsEnabled] = useState(false);
   const [ownerPin, setOwnerPinState] = useState(getOwnerPin());
   const [newPin, setNewPin] = useState('');
+  const [syncing, setSyncing] = useState(false);
   const printer = usePrinter();
+  const queue = useEtimsQueue();
+
+  const lastAttempt = queue.items
+    .map((i) => i.lastAttempt)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    const result = await attemptEtimsSync();
+    setSyncing(false);
+    if (result.submitted + result.failed === 0) {
+      toast.info(navigator.onLine ? 'Nothing to sync' : 'Offline — will retry when online');
+    } else {
+      toast.success(`Synced ${result.submitted}${result.failed ? `, ${result.failed} failed` : ''}`);
+    }
+  };
+
 
   useEffect(() => {
     (async () => {

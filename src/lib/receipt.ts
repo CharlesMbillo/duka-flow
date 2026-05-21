@@ -50,19 +50,24 @@ export function printReceipt(tx: Transaction, businessName = 'KwaPOS') {
   w.document.close();
 }
 
+function toCsv(rows: (string | number)[][]): string {
+  return rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+}
+
+function download(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function downloadSalesReport(transactions: Transaction[]) {
-  const header = [
-    'Receipt',
-    'Date',
-    'Items',
-    'Subtotal',
-    'Tax',
-    'Total',
-    'Paid',
-    'Change',
-    'Payment',
-  ];
-  const rows = transactions.map((tx) => [
+  const active = transactions.filter((t) => !t.voided);
+  const header = ['Receipt', 'Date', 'Items', 'Subtotal', 'Tax', 'Total', 'Paid', 'Change', 'Payment'];
+  const rows: (string | number)[][] = active.map((tx) => [
     tx.receiptNumber,
     new Date(tx.createdAt).toISOString(),
     tx.items.reduce((n, i) => n + i.quantity, 0),
@@ -73,16 +78,30 @@ export function downloadSalesReport(transactions: Transaction[]) {
     tx.change,
     tx.paymentMethod,
   ]);
-
-  const csv = [header, ...rows]
-    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `kwapos-sales-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  download(`kwapos-sales-${new Date().toISOString().slice(0, 10)}.csv`, toCsv([header, ...rows]));
 }
+
+export function downloadVoidReport(transactions: Transaction[]) {
+  const voided = transactions.filter((t) => t.voided);
+  const totalValue = voided.reduce((n, t) => n + t.total, 0);
+  const summary: (string | number)[][] = [
+    ['KwaPOS Void Report', new Date().toISOString()],
+    ['Total voided sales', voided.length],
+    ['Total voided value (KES)', totalValue],
+    [],
+  ];
+  const header = ['Receipt', 'Original Date', 'Voided At', 'Voided By', 'Reason', 'Items', 'Subtotal', 'Tax', 'Total'];
+  const rows: (string | number)[][] = voided.map((tx) => [
+    tx.receiptNumber,
+    new Date(tx.createdAt).toISOString(),
+    tx.voidedAt ?? '',
+    tx.voidedBy ?? '',
+    tx.voidReason ?? '',
+    tx.items.reduce((n, i) => n + i.quantity, 0),
+    tx.subtotal,
+    tx.totalTax,
+    tx.total,
+  ]);
+  download(`kwapos-voids-${new Date().toISOString().slice(0, 10)}.csv`, toCsv([...summary, header, ...rows]));
+}
+

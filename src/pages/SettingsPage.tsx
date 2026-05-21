@@ -5,11 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, Download, Upload, Store, Bluetooth, BluetoothOff, Printer, Users } from 'lucide-react';
+import { Shield, Download, Upload, Store, Bluetooth, BluetoothOff, Printer, Users, CloudUpload, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePrinter } from '@/hooks/usePrinter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getOwnerPin, setOwnerPin, setRole } from '@/lib/roles';
+import { useEtimsQueue } from '@/hooks/useEtimsQueue';
+import { attemptEtimsSync } from '@/lib/sync';
+import { format } from 'date-fns';
 
 export default function SettingsPage() {
   const [businessName, setBusinessName] = useState('');
@@ -17,7 +20,27 @@ export default function SettingsPage() {
   const [etimsEnabled, setEtimsEnabled] = useState(false);
   const [ownerPin, setOwnerPinState] = useState(getOwnerPin());
   const [newPin, setNewPin] = useState('');
+  const [syncing, setSyncing] = useState(false);
   const printer = usePrinter();
+  const queue = useEtimsQueue();
+
+  const lastAttempt = queue.items
+    .map((i) => i.lastAttempt)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    const result = await attemptEtimsSync();
+    setSyncing(false);
+    if (result.submitted + result.failed === 0) {
+      toast.info(navigator.onLine ? 'Nothing to sync' : 'Offline — will retry when online');
+    } else {
+      toast.success(`Synced ${result.submitted}${result.failed ? `, ${result.failed} failed` : ''}`);
+    }
+  };
+
 
   useEffect(() => {
     (async () => {
@@ -237,6 +260,36 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-base flex items-center gap-2">
+            <CloudUpload className="h-4 w-4" /> eTIMS Sync
+          </CardTitle>
+          <CardDescription>
+            Sales are saved offline. KRA submissions run in the background when online.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Pending submissions</span>
+            <span className={`font-semibold ${queue.pendingCount > 0 ? 'text-warning' : 'text-primary'}`}>
+              {queue.pendingCount}
+            </span>
+          </div>
+          {lastAttempt && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Last attempt</span>
+              <span>{format(new Date(lastAttempt), 'MMM d, h:mm a')}</span>
+            </div>
+          )}
+          <Button variant="outline" className="w-full gap-2" onClick={handleSync} disabled={syncing}>
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Retry sync now'}
+          </Button>
+        </CardContent>
+      </Card>
+
 
       <Card>
         <CardHeader className="pb-3">

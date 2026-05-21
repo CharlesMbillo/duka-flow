@@ -1,0 +1,41 @@
+name: "CodeQL Analysis"
+
+on:
+  # Run scans only on critical branches and PRs
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  # Scheduled run once per day at midnight UTC
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript' ] # adjust if your repo uses other languages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

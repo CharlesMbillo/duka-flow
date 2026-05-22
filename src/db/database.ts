@@ -7,12 +7,27 @@ export interface Product {
   barcode?: string;
   price: number;
   cost?: number;
+  /** Derived from the inventory ledger. Not persisted on the product record after v2. */
   stock: number;
   lowStockAlert: number;
   taxCategory: TaxCategory;
   category?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type LedgerMovementType = 'purchase' | 'sale' | 'return' | 'damage' | 'adjustment';
+
+export interface LedgerEntry {
+  id?: number;
+  productId: number;
+  transactionId?: number;
+  movementType: LedgerMovementType;
+  /** Positive for additions, negative for removals. */
+  quantity: number;
+  reason?: string;
+  createdBy?: string;
+  createdAt: string;
 }
 
 export interface CartItem {
@@ -93,7 +108,7 @@ export function generateReceiptNumber(): string {
 
 // Simple IndexedDB wrapper
 const DB_NAME = 'KwaPOSDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -101,8 +116,9 @@ function openDB(): Promise<IDBDatabase> {
   if (dbInstance) return Promise.resolve(dbInstance);
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      const tx = request.transaction!;
       if (!db.objectStoreNames.contains('products')) {
         const store = db.createObjectStore('products', { keyPath: 'id', autoIncrement: true });
         store.createIndex('name', 'name', { unique: false });
@@ -122,6 +138,38 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('settings')) {
         const store = db.createObjectStore('settings', { keyPath: 'id', autoIncrement: true });
         store.createIndex('key', 'key', { unique: true });
+      }
+
+      // v2: append-only inventory ledger
+      if (event.oldVersion < 2) {
+        if (!db.objectStoreNames.contains('inventoryLedger')) {
+          const ledger = db.createObjectStore('inventoryLedger', { keyPath: 'id', autoIncrement: true });
+          ledger.createIndex('productId', 'productId', { unique: false });
+          ledger.createIndex('transactionId', 'transactionId', { unique: false });
+        }
+        // Migrate existing product.stock into seed ledger entries.
+        const ledger = tx.objectStore('inventoryLedger');
+        const products = tx.objectStore('products');
+        const cursorReq = products.openCursor();
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (!cursor) return;
+          const p = cursor.value as Product & { stock?: number };
+          const initial = typeof p.stock === 'number' ? p.stock : 0;
+          if (initial !== 0) {
+            ledger.add({
+              productId: p.id,
+              movementType: 'adjustment',
+              quantity: initial,
+              reason: 'Initial migration from v1 stock field',
+              createdAt: new Date().toISOString(),
+            } as LedgerEntry);
+          }
+          // Strip stock from persisted record; in-memory consumers receive derived stock.
+          delete p.stock;
+          cursor.update(p);
+          cursor.continue();
+        };
       }
     };
     request.onsuccess = () => {
@@ -231,6 +279,17 @@ export const db = {
     delete: async (id: number) => { await remove('cartItems', id); emit('cartItems'); },
     clear: async () => { await clearStore('cartItems'); emit('cartItems'); },
   },
+  ledger: {
+    getAll: () => getAll<LedgerEntry>('inventoryLedger'),
+    getByProduct: (productId: number) => getByIndex<LedgerEntry>('inventoryLedger', 'productId', productId),
+    getByTransaction: (transactionId: number) => getByIndex<LedgerEntry>('inventoryLedger', 'transactionId', transactionId),
+    add: async (entry: LedgerEntry) => {
+      const r = await add('inventoryLedger', entry);
+      emit('inventoryLedger');
+      emit('products');
+      return r;
+    },
+  },
   transactions: {
     getAll: () => getAll<Transaction>('transactions'),
     get: (id: number) => getById<Transaction>('transactions', id),
@@ -240,17 +299,35 @@ export const db = {
     void: async (id: number, reason: string, by: 'owner' | 'salesman') => {
       const tx = await getById<Transaction>('transactions', id);
       if (!tx || tx.voided) return;
-      // Restore stock for each line item
-      for (const item of tx.items) {
-        const product = await getById<Product>('products', item.productId);
-        if (product) {
-          product.stock += item.quantity;
-          product.updatedAt = new Date().toISOString();
-          await put('products', product);
+      // Reverse stock by appending inverse ledger entries for this transaction.
+      const entries = await getByIndex<LedgerEntry>('inventoryLedger', 'transactionId', id);
+      const now = new Date().toISOString();
+      if (entries.length > 0) {
+        for (const e of entries) {
+          await add('inventoryLedger', {
+            productId: e.productId,
+            transactionId: id,
+            movementType: 'return',
+            quantity: -e.quantity,
+            reason: `Void: ${reason}`,
+            createdAt: now,
+          } as LedgerEntry);
+        }
+      } else {
+        // Fallback for transactions created before the ledger migration.
+        for (const item of tx.items) {
+          await add('inventoryLedger', {
+            productId: item.productId,
+            transactionId: id,
+            movementType: 'return',
+            quantity: item.quantity,
+            reason: `Void: ${reason}`,
+            createdAt: now,
+          } as LedgerEntry);
         }
       }
       tx.voided = true;
-      tx.voidedAt = new Date().toISOString();
+      tx.voidedAt = now;
       tx.voidReason = reason;
       tx.voidedBy = by;
       await put('transactions', tx);
@@ -261,9 +338,10 @@ export const db = {
         invoiceData: JSON.stringify({ type: 'void', receiptNumber: tx.receiptNumber, reason, voidedAt: tx.voidedAt }),
         status: 'queued',
         attempts: 0,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       } as EtimsQueueItem);
       emit('transactions');
+      emit('inventoryLedger');
       emit('products');
     },
   },
@@ -284,26 +362,51 @@ export const db = {
   },
 };
 
+// Ledger-derived stock helpers
+export async function getCurrentStock(productId: number): Promise<number> {
+  const entries = await db.ledger.getByProduct(productId);
+  return entries.reduce((sum, e) => sum + e.quantity, 0);
+}
+
+export async function getAllStockLevels(): Promise<Map<number, number>> {
+  const entries = await db.ledger.getAll();
+  const map = new Map<number, number>();
+  for (const e of entries) {
+    map.set(e.productId, (map.get(e.productId) ?? 0) + e.quantity);
+  }
+  return map;
+}
+
 // Seed
 export async function seedSampleProducts() {
   const existing = await db.products.getAll();
   if (existing.length > 0) return;
 
   const now = new Date().toISOString();
-  const samples: Product[] = [
-    { name: 'Unga (2kg)', sku: 'UNG-001', price: 210, cost: 180, stock: 50, lowStockAlert: 10, taxCategory: 'zero_rated', category: 'Food', createdAt: now, updatedAt: now },
-    { name: 'Sugar (1kg)', sku: 'SUG-001', price: 180, cost: 150, stock: 40, lowStockAlert: 8, taxCategory: 'zero_rated', category: 'Food', createdAt: now, updatedAt: now },
-    { name: 'Cooking Oil (1L)', sku: 'OIL-001', price: 350, cost: 300, stock: 30, lowStockAlert: 5, taxCategory: 'standard_16', category: 'Food', createdAt: now, updatedAt: now },
-    { name: 'Milk (500ml)', sku: 'MLK-001', price: 65, cost: 50, stock: 100, lowStockAlert: 20, taxCategory: 'zero_rated', category: 'Dairy', createdAt: now, updatedAt: now },
-    { name: 'Bread (400g)', sku: 'BRD-001', price: 60, cost: 45, stock: 80, lowStockAlert: 15, taxCategory: 'zero_rated', category: 'Bakery', createdAt: now, updatedAt: now },
-    { name: 'Tea Leaves (100g)', sku: 'TEA-001', price: 120, cost: 90, stock: 60, lowStockAlert: 10, taxCategory: 'standard_16', category: 'Beverages', createdAt: now, updatedAt: now },
-    { name: 'Soap Bar', sku: 'SOP-001', price: 85, cost: 60, stock: 45, lowStockAlert: 10, taxCategory: 'standard_16', category: 'Household', createdAt: now, updatedAt: now },
-    { name: 'Panadol (10 tabs)', sku: 'PAN-001', price: 50, cost: 30, stock: 200, lowStockAlert: 30, taxCategory: 'exempt', category: 'Pharmacy', createdAt: now, updatedAt: now },
-    { name: 'Exercise Book (96pg)', sku: 'EXB-001', price: 45, cost: 30, stock: 150, lowStockAlert: 25, taxCategory: 'standard_16', category: 'Stationery', createdAt: now, updatedAt: now },
-    { name: 'Airtime Card (100)', sku: 'AIR-100', price: 100, cost: 97, stock: 500, lowStockAlert: 50, taxCategory: 'exempt', category: 'Airtime', createdAt: now, updatedAt: now },
+  const samples: Array<Omit<Product, 'id' | 'stock'> & { initialStock: number }> = [
+    { name: 'Unga (2kg)', sku: 'UNG-001', price: 210, cost: 180, initialStock: 50, lowStockAlert: 10, taxCategory: 'zero_rated', category: 'Food', createdAt: now, updatedAt: now },
+    { name: 'Sugar (1kg)', sku: 'SUG-001', price: 180, cost: 150, initialStock: 40, lowStockAlert: 8, taxCategory: 'zero_rated', category: 'Food', createdAt: now, updatedAt: now },
+    { name: 'Cooking Oil (1L)', sku: 'OIL-001', price: 350, cost: 300, initialStock: 30, lowStockAlert: 5, taxCategory: 'standard_16', category: 'Food', createdAt: now, updatedAt: now },
+    { name: 'Milk (500ml)', sku: 'MLK-001', price: 65, cost: 50, initialStock: 100, lowStockAlert: 20, taxCategory: 'zero_rated', category: 'Dairy', createdAt: now, updatedAt: now },
+    { name: 'Bread (400g)', sku: 'BRD-001', price: 60, cost: 45, initialStock: 80, lowStockAlert: 15, taxCategory: 'zero_rated', category: 'Bakery', createdAt: now, updatedAt: now },
+    { name: 'Tea Leaves (100g)', sku: 'TEA-001', price: 120, cost: 90, initialStock: 60, lowStockAlert: 10, taxCategory: 'standard_16', category: 'Beverages', createdAt: now, updatedAt: now },
+    { name: 'Soap Bar', sku: 'SOP-001', price: 85, cost: 60, initialStock: 45, lowStockAlert: 10, taxCategory: 'standard_16', category: 'Household', createdAt: now, updatedAt: now },
+    { name: 'Panadol (10 tabs)', sku: 'PAN-001', price: 50, cost: 30, initialStock: 200, lowStockAlert: 30, taxCategory: 'exempt', category: 'Pharmacy', createdAt: now, updatedAt: now },
+    { name: 'Exercise Book (96pg)', sku: 'EXB-001', price: 45, cost: 30, initialStock: 150, lowStockAlert: 25, taxCategory: 'standard_16', category: 'Stationery', createdAt: now, updatedAt: now },
+    { name: 'Airtime Card (100)', sku: 'AIR-100', price: 100, cost: 97, initialStock: 500, lowStockAlert: 50, taxCategory: 'exempt', category: 'Airtime', createdAt: now, updatedAt: now },
   ];
 
-  for (const p of samples) {
-    await db.products.add(p);
+  for (const s of samples) {
+    const { initialStock, ...rest } = s;
+    const productId = await db.products.add({ ...rest, stock: 0 } as Product);
+    if (initialStock > 0) {
+      await db.ledger.add({
+        productId,
+        movementType: 'purchase',
+        quantity: initialStock,
+        reason: 'Initial stock',
+        createdAt: now,
+      });
+    }
   }
 }

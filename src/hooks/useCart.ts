@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { db, type CartItem, type Product, getTaxRate, generateReceiptNumber, type Transaction } from '@/db/database';
+import { db, type CartItem, type Product, getTaxRate, generateReceiptNumber, type Transaction, getCurrentStock } from '@/db/database';
+import { addStockMovement } from '@/lib/inventory';
 import { subscribe } from '@/lib/dbEvents';
 
 export function useCart() {
@@ -76,6 +77,14 @@ export function useCart() {
     const items = await db.cartItems.getAll();
     if (items.length === 0) throw new Error('Cart is empty');
 
+    // Pre-check stock from the ledger before recording the sale.
+    for (const item of items) {
+      const available = await getCurrentStock(item.productId);
+      if (available < item.quantity) {
+        throw new Error(`Insufficient stock for ${item.productName} (have ${available}, need ${item.quantity})`);
+      }
+    }
+
     const sub = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
     const tax = items.reduce((s, i) => s + i.taxAmount, 0);
     const tot = sub + tax;
@@ -96,14 +105,12 @@ export function useCart() {
     const txId = await db.transactions.add(transaction);
     transaction.id = txId;
 
-    // Decrement stock
+    // Append a sale ledger entry per line; stock is derived from these.
     for (const item of items) {
-      const product = await db.products.get(item.productId);
-      if (product) {
-        product.stock = Math.max(0, product.stock - item.quantity);
-        product.updatedAt = new Date().toISOString();
-        await db.products.put(product);
-      }
+      await addStockMovement(item.productId, 'sale', item.quantity, {
+        transactionId: txId,
+        reason: `Sale ${transaction.receiptNumber}`,
+      });
     }
 
     await db.cartItems.clear();

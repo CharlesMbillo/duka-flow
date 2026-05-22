@@ -1,85 +1,66 @@
-## Plan
+## Goal
 
-Two focused additions on top of the existing offline IndexedDB stack.
+Refactor inventory from a mutable `Product.stock` field to an append-only **ledger** in IndexedDB. Stock becomes a computed value derived from `inventoryLedger` entries, giving a full audit trail, safe reversals, and clean offline-sync semantics. Scope is **local-first (IndexedDB only)** — no Supabase tables yet, since the rest of KwaPOS runs entirely on Dexie/IndexedDB.
 
-### 1. Voiding & Void Reporting
-
-**Data model (src/db/database.ts)**
-- Extend `Transaction` with: `voided?: boolean`, `voidedAt?: string`, `voidReason?: string`, `voidedBy?: 'owner' | 'salesman'`.
-- Add `db.transactions.void(id, reason, role)` that:
-  - Loads the transaction, marks it voided, writes back via `put`.
-  - Restores stock for each line item (`product.stock += qty`).
-  - Emits `transactions` and `products` events so POS, Inventory, and History refresh instantly.
-- Bump `DB_VERSION` to 2 (no schema changes needed beyond keyPath, but version bump is harmless and future-proof).
-
-**Authorization**
-- Only `owner` role may void. Use existing `useRole` + `RoleGate` PIN flow — Salesman triggering void prompts for owner PIN.
-
-**UI**
-- `HistoryPage.tsx`: in the receipt dialog, add a red "Void Sale" button (hidden if already voided). Confirm dialog requires a reason (textarea). Voided rows in the list get a `Voided` badge, strikethrough total, and are excluded from the sales total/count summary.
-- New filter chips at top of History: `All / Active / Voided`.
-- `SalesPage.tsx` / reporting helpers: exclude voided txs from revenue and tax totals; show voided count separately.
-
-**Void Report**
-- New export action in History: "Void Report (CSV)" via `src/lib/receipt.ts` → `downloadVoidReport(transactions)`.
-- Columns: Receipt #, Original Date, Voided At, Voided By, Reason, Items, Subtotal, Tax, Total.
-- Header summary row with total voided count and value.
-
-**eTIMS note**
-- Voided transactions get `kraSubmissionStatus = 'pending'` re-queued as a credit note placeholder entry in `etimsQueue` (status `queued`, payload tagged `type: 'void'`). Sync logic stays as-is for now — just ensures voids are not lost.
-
-### 2. Offline-First Capability
-
-The PWA plugin is already wired in `vite.config.ts` and IndexedDB is already the source of truth. What's missing is registration, an offline UX, and a sync indicator.
-
-**Service worker registration**
-- `src/main.tsx`: import `registerSW` from `virtual:pwa-register` with `{ immediate: true, onNeedRefresh, onOfflineReady }`.
-- Show a toast (sonner) when the app is offline-ready and another when a new version is available with a "Reload" action.
-- Add `/// <reference types="vite-plugin-pwa/client" />` in `src/vite-env.d.ts`.
-
-**Offline indicator (always-on UX)**
-- New `src/hooks/useOnline.ts` listening to `online`/`offline` window events.
-- New `src/components/OfflineBadge.tsx`: small pill in the AppShell header — green "Online" / amber "Offline — sales saved locally". Mounted in `AppShell.tsx` next to the role switcher.
-
-**Sync queue UI**
-- `src/hooks/useEtimsQueue.ts`: poll `db.etimsQueue.getAll()` (and subscribe via `dbEvents`) to expose `pendingCount`.
-- Badge on Settings nav item and a "Pending eTIMS submissions" card on `SettingsPage.tsx` showing queued count and last attempt; button "Retry sync now" (no-op stub if network down).
-
-**Background sync trigger**
-- `src/lib/sync.ts`: `attemptEtimsSync()` iterates queue items, marks `submitting`, then `submitted` (stub — real KRA call is out of scope here). Called:
-  - on app start (after seed),
-  - whenever `online` event fires,
-  - on manual retry button.
-- Emits `transactions` to refresh History submission status badges.
-
-**Install affordance**
-- `LandingPage.tsx` + `InstallPage.tsx` already exist. Wire the `beforeinstallprompt` event into a small `useInstallPrompt` hook so the "Install App" button actually triggers the native prompt when available.
-
-**Manifest/cache verification**
-- Confirm `navigateFallback` for SPA routes (add `'/index.html'` to workbox so deep links work offline).
-- Add `cleanupOutdatedCaches: true` and `skipWaiting: true`.
-
-### Files
+## Architecture
 
 ```text
-src/db/database.ts                   edit  (void method, fields, version bump)
-src/lib/receipt.ts                   edit  (downloadVoidReport)
-src/pages/HistoryPage.tsx            edit  (void button, filter, badges)
-src/pages/SalesPage.tsx              edit  (exclude voided)
-src/main.tsx                         edit  (registerSW)
-src/vite-env.d.ts                    edit  (pwa client types)
-src/hooks/useOnline.ts               new
-src/hooks/useEtimsQueue.ts           new
-src/hooks/useInstallPrompt.ts        new
-src/components/OfflineBadge.tsx      new
-src/components/layout/AppShell.tsx   edit  (mount OfflineBadge)
-src/pages/SettingsPage.tsx           edit  (sync queue card)
-src/pages/InstallPage.tsx            edit  (use install prompt hook)
-src/lib/sync.ts                      new
-vite.config.ts                       edit  (skipWaiting, cleanupOutdatedCaches, navigateFallback)
+Sale ─┐
+Void ─┼─► addStockMovement() ─► inventoryLedger (append-only)
+Adj. ─┘                                │
+                                       ▼
+                              getCurrentStock(id) = Σ quantity
+                                       │
+                                       ▼
+                       useProducts() exposes { ...product, stock }
 ```
 
-### Out of scope
+`Product.stock` stays on the type as a **derived, read-only** field populated by the hook (so `ProductGrid`, low-stock alerts, etc. keep working unchanged). The field is no longer written by sales/voids.
 
-- Real KRA eTIMS network submission (kept as a stub — schema and queue are ready).
-- Cloud sync of transactions across devices (no auth backend in this scope).
+## Changes
+
+### 1. `src/db/database.ts`
+- Bump `DB_VERSION` to `2`.
+- Add `LedgerEntry` interface: `{ id?, productId, transactionId?, movementType: 'purchase'|'sale'|'return'|'damage'|'adjustment', quantity, reason?, createdBy?, createdAt }`.
+- Create `inventoryLedger` object store with indexes on `productId` and `transactionId`.
+- In `onupgradeneeded` v1→v2: read every existing product, write an `adjustment` ledger entry seeded with current `stock` ("Initial migration"), then drop the `stock` field from products on disk.
+- Add `db.ledger` API: `getAll`, `getByProduct(productId)`, `getByTransaction(txId)`, `add(entry)` (emits `inventoryLedger` event).
+- Add helpers `getCurrentStock(productId)` and `getAllStockLevels(): Map<number, number>` that fold the ledger.
+- Update seed: after `db.products.add`, write an initial `purchase` ledger entry for each sample's starting stock instead of relying on the field.
+
+### 2. `src/lib/inventory.ts` (new)
+- `addStockMovement(productId, type, quantity, opts?)` — normalizes sign (`sale`/`damage` negative, `purchase`/`return` positive, `adjustment` as-is), writes ledger, emits events.
+- `reverseTransaction(transactionId, reason)` — fetches all ledger rows for that tx and writes inverse entries (used by void).
+- Re-exports `getCurrentStock`.
+
+### 3. `src/hooks/useCart.ts` / `CheckoutDialog` flow
+- In `checkout()`, instead of `product.stock -= qty` + `db.products.put`, call `addStockMovement(productId, 'sale', qty, { transactionId, reason })` for each line. Pre-check stock via `getCurrentStock` and abort with a toast if insufficient.
+
+### 4. `src/db/database.ts` — `transactions.void`
+- Replace the in-place `product.stock += item.quantity` loop with `reverseTransaction(tx.id, 'Void: ' + reason)`. Keeps eTIMS void queueing unchanged.
+
+### 5. `src/hooks/useProducts.ts`
+- After loading products, fold the ledger once (`getAllStockLevels`) and attach `stock` to each product in memory. Subscribe to the new `inventoryLedger` event in addition to `products`/`transactions` so the grid refreshes live.
+
+### 6. `src/pages/InventoryPage.tsx`
+- Add a **Stock History** drawer per product (uses `db.ledger.getByProduct`) showing date, type badge, qty, reason.
+- Replace any direct stock edits in the product form with an **Adjust Stock** dialog that writes an `adjustment` ledger entry with a required reason.
+- "Receive stock" action writes a `purchase` entry.
+
+### 7. `src/lib/dbEvents.ts`
+- Add `'inventoryLedger'` to the event channel union.
+
+### 8. Tests (`src/lib/inventory.test.ts`)
+- Sum of mixed movements equals expected stock.
+- `reverseTransaction` restores stock to pre-sale level.
+- History returns entries in newest-first order.
+
+## Explicitly out of scope
+
+- Supabase `inventory_ledger` table, materialized view, triggers, and `refresh_product_stock` RPC. KwaPOS currently has no Supabase-backed product/sale tables; adding them is a separate, larger piece of work. The local ledger is structured so a future sync layer can push entries 1:1.
+- Client-side stock cache with TTL (premature — the per-product fold over a small IndexedDB index is already fast; we'll add caching only if profiling shows it's needed).
+- Branch reconciliation / multi-store analytics.
+
+## Migration safety
+
+The v1→v2 IndexedDB upgrade seeds one ledger entry per existing product equal to its current `stock`, so users see identical stock numbers after the upgrade — no data loss, no manual recount.

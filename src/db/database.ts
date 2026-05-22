@@ -166,7 +166,7 @@ function openDB(): Promise<IDBDatabase> {
             } as LedgerEntry);
           }
           // Strip stock from persisted record; in-memory consumers receive derived stock.
-          delete p.stock;
+          delete (p as { stock?: number }).stock;
           cursor.update(p);
           cursor.continue();
         };

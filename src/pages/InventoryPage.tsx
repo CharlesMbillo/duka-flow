@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useProducts } from '@/hooks/useProducts';
-import { db, type Product, type TaxCategory, type LedgerEntry, getTaxLabel } from '@/db/database';
+import { type Product, type TaxCategory, getTaxLabel } from '@/db/database';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Edit, Trash2, AlertTriangle, Package, History, SlidersHorizontal } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, AlertTriangle, Package } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -16,34 +15,12 @@ const defaultProduct = {
   taxCategory: 'standard_16' as TaxCategory, category: '',
 };
 
-const movementColor: Record<LedgerEntry['movementType'], string> = {
-  purchase: 'bg-success/10 text-success',
-  return: 'bg-success/10 text-success',
-  sale: 'bg-primary/10 text-primary',
-  damage: 'bg-destructive/10 text-destructive',
-  adjustment: 'bg-warning/10 text-warning',
-};
-
 export default function InventoryPage() {
   const [search, setSearch] = useState('');
-  const { products, lowStockProducts, addProduct, updateProduct, deleteProduct, adjustStock } = useProducts(search);
+  const { products, lowStockProducts, addProduct, updateProduct, deleteProduct } = useProducts(search);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState(defaultProduct);
-
-  const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<LedgerEntry[]>([]);
-
-  const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
-  const [adjustDelta, setAdjustDelta] = useState(0);
-  const [adjustReason, setAdjustReason] = useState('');
-
-  useEffect(() => {
-    if (!historyProduct?.id) return;
-    db.ledger.getByProduct(historyProduct.id).then(entries => {
-      setHistoryEntries([...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-    });
-  }, [historyProduct]);
 
   const openAdd = () => { setEditing(null); setForm(defaultProduct); setDialogOpen(true); };
   const openEdit = (p: Product) => {
@@ -58,9 +35,7 @@ export default function InventoryPage() {
       return;
     }
     if (editing) {
-      // Stock is no longer edited here; use the Adjust Stock dialog.
-      const { stock, ...rest } = form;
-      await updateProduct(editing.id!, rest);
+      await updateProduct(editing.id!, form);
       toast.success('Product updated');
     } else {
       await addProduct(form);
@@ -72,23 +47,6 @@ export default function InventoryPage() {
   const handleDelete = async (id: number) => {
     await deleteProduct(id);
     toast.success('Product deleted');
-  };
-
-  const openAdjust = (p: Product) => {
-    setAdjustProduct(p);
-    setAdjustDelta(0);
-    setAdjustReason('');
-  };
-
-  const handleAdjust = async () => {
-    if (!adjustProduct?.id) return;
-    if (!adjustDelta || !adjustReason.trim()) {
-      toast.error('Enter a non-zero quantity and a reason');
-      return;
-    }
-    await adjustStock(adjustProduct.id, adjustDelta, adjustReason.trim());
-    toast.success(`Stock adjusted by ${adjustDelta > 0 ? '+' : ''}${adjustDelta}`);
-    setAdjustProduct(null);
   };
 
   return (
@@ -141,12 +99,6 @@ export default function InventoryPage() {
                   </p>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => openAdjust(p)} title="Adjust stock" className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted">
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => setHistoryProduct(p)} title="Stock history" className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted">
-                    <History className="h-3.5 w-3.5" />
-                  </button>
                   <button onClick={() => openEdit(p)} className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted">
                     <Edit className="h-3.5 w-3.5" />
                   </button>
@@ -192,13 +144,8 @@ export default function InventoryPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>{editing ? 'Stock (use Adjust)' : 'Initial Stock'}</Label>
-                <Input
-                  type="number"
-                  disabled={!!editing}
-                  value={form.stock || ''}
-                  onChange={e => setForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))}
-                />
+                <Label>Stock</Label>
+                <Input type="number" value={form.stock || ''} onChange={e => setForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))} />
               </div>
               <div>
                 <Label>Low Stock Alert</Label>
@@ -225,72 +172,6 @@ export default function InventoryPage() {
               {editing ? 'Update Product' : 'Add Product'}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Adjust stock dialog */}
-      <Dialog open={!!adjustProduct} onOpenChange={(o) => !o && setAdjustProduct(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-display">Adjust Stock</DialogTitle>
-          </DialogHeader>
-          {adjustProduct && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {adjustProduct.name} — current stock: <span className="font-semibold text-foreground">{adjustProduct.stock}</span>
-              </p>
-              <div>
-                <Label>Quantity change (+/-)</Label>
-                <Input
-                  type="number"
-                  value={adjustDelta || ''}
-                  onChange={e => setAdjustDelta(parseInt(e.target.value) || 0)}
-                  placeholder="e.g. -3 for damage, +10 for recount"
-                />
-              </div>
-              <div>
-                <Label>Reason *</Label>
-                <Input
-                  value={adjustReason}
-                  onChange={e => setAdjustReason(e.target.value)}
-                  placeholder="e.g. Damaged in transit, Stock recount"
-                />
-              </div>
-              <Button onClick={handleAdjust} className="w-full">Apply Adjustment</Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Stock history dialog */}
-      <Dialog open={!!historyProduct} onOpenChange={(o) => !o && setHistoryProduct(null)}>
-        <DialogContent className="sm:max-w-md max-h-[80dvh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display">Stock History</DialogTitle>
-          </DialogHeader>
-          {historyProduct && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">{historyProduct.name}</p>
-              {historyEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No movements yet</p>
-              ) : (
-                historyEntries.map(e => (
-                  <div key={e.id} className="flex items-center gap-3 p-2 rounded-md border border-border">
-                    <Badge className={`${movementColor[e.movementType]} capitalize`} variant="outline">
-                      {e.movementType}
-                    </Badge>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground truncate">{e.reason || '—'}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(e.createdAt).toLocaleString()}</p>
-                    </div>
-                    <span className={`font-display font-bold text-sm ${e.quantity >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {e.quantity > 0 ? '+' : ''}{e.quantity}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>

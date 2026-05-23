@@ -1,7 +1,7 @@
 // Cross-component / cross-tab event bus for instant data sync.
 // Any mutation to local data calls emit('<table>') and all subscribers refresh.
 
-type Table = 'products' | 'transactions' | 'cartItems' | 'settings' | 'inventoryLedger';
+type Table = 'products' | 'transactions' | 'cartItems' | 'settings';
 
 const CHANNEL_NAME = 'kwapos-db';
 const channel: BroadcastChannel | null =

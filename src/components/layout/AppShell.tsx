@@ -34,10 +34,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex md:flex-col md:w-56 border-r border-border bg-card shrink-0">
         <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
           <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-display font-bold">K</span>
+            <span className="text-primary-foreground font-display font-bold">J</span>
           </div>
           <div className="flex-1">
-            <h1 className="font-display font-bold text-base tracking-tight leading-none">KwaPOS</h1>
+            <h1 className="font-display font-bold text-base tracking-tight leading-none">JimwasPOS</h1>
             <p className="text-[10px] text-muted-foreground mt-0.5">Point of sale</p>
           </div>
         </div>

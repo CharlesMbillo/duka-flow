@@ -13,7 +13,7 @@ import { RoleGate } from '@/components/RoleGate';
 function ShellRoute({ children, requireOwner = false }: { children: React.ReactNode; requireOwner?: boolean }) {
   return (
     <AppShell>
-      {requireOwner ? <RoleGate requiredRole="owner">{children}</RoleGate> : children}
+      <RoleGate requireOwner={requireOwner}>{children}</RoleGate>
     </AppShell>
   );
 }

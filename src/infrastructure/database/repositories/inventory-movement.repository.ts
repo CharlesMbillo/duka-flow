@@ -1,5 +1,6 @@
 import { db } from '../dexie.db';
-import { InventoryMovement, InventoryMovementType } from '../../../domains/inventory/types';
+import type { InventoryMovement } from '../../../domains/inventory/types';
+import { InventoryMovementType } from '../../../domains/inventory/types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

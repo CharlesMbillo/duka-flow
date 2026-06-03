@@ -13,11 +13,22 @@ export default defineConfig({
     target: 'es2022',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
-          charts: ['recharts'],
-          db: ['dexie', '@supabase/supabase-js'],
+        manualChunks: (id: string) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('dexie') || id.includes('supabase')) {
+              return 'vendor-db';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'vendor-ui';
+            }
+            return 'vendor';
+          }
         },
       },
     },

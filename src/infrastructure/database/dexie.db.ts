@@ -2,9 +2,9 @@ import Dexie, { Table } from 'dexie';
 import { Product } from '../../domains/inventory/types';
 import { Sale, SuspendedCart } from '../../domains/sales/types';
 import { Payment, MpesaTransaction } from '../../domains/payments/types';
-import { Customer, CustomerDebt } from '../../domains/customers/types';
-import { User } from '../../domains/auth/types';
-import { AuditLog, SyncQueue } from '../../domains/shared/types';
+import { Customer, type CustomerDebt } from '../../domains/customers/types';
+import type { User } from '../../domains/auth/types';
+import type { AuditLog, SyncQueue } from '../../domains/shared/types';
 
 /**
  * Dexie Database Configuration

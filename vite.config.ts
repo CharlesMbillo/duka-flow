@@ -11,15 +11,5 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
-          charts: ['recharts'],
-          db: ['dexie', '@supabase/supabase-js'],
-        },
-      },
-    },
   },
 })

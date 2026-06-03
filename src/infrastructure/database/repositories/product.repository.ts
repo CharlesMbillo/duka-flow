@@ -69,7 +69,7 @@ export class ProductRepository {
     return await db.products
       .where('tenantId')
       .equals(this.tenantId)
-      .filter((p) => p.isActive)
+      .filter((p: Product) => p.isActive)
       .limit(limit)
       .toArray();
   }
@@ -83,7 +83,7 @@ export class ProductRepository {
       .where('tenantId')
       .equals(this.tenantId)
       .filter(
-        (p) =>
+        (p: Product) =>
           p.name.toLowerCase().includes(lowerQuery) ||
           p.sku.toLowerCase().includes(lowerQuery)
       )
@@ -120,7 +120,7 @@ export class ProductRepository {
     return await db.products
       .where('tenantId')
       .equals(this.tenantId)
-      .filter((p) => p.category === category)
+      .filter((p: Product) => p.category === category)
       .toArray();
   }
 

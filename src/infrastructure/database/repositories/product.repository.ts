@@ -1,5 +1,5 @@
 import { db } from './dexie.db';
-import { Product } from '../../domains/inventory/types';
+import type { Product } from '../../domains/inventory/types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
